@@ -1,5 +1,5 @@
 ###############################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.    #
+#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.    #
 #                                                                             #
 #  Licensed under the Apache License, Version 2.0 (the "License").            #
 #  You may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ def find_replace(function_path, file_name, destination_file, parameters):
     try:
 
         j2loader = FileSystemLoader(function_path)
-        j2env = Environment(loader=j2loader, autoescape=True)  # Compliant
+        j2env = Environment(loader=j2loader)  # Compliant
         j2template = j2env.get_template(file_name)
         dictionary = {}
         for key, value in parameters.items():

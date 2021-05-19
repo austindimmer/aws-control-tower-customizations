@@ -1,5 +1,5 @@
 ###############################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.    #
+#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.    #
 #                                                                             #
 #  Licensed under the Apache License, Version 2.0 (the "License").            #
 #  You may not use this file except in compliance with the License.
@@ -45,12 +45,37 @@ def sanitize(name, space_allowed=False, replace_with_character='_'):
     return sanitized_name
 
 
-def trim_length(string, length):
+def trim_length_from_end(string, length):
+    """ Trims the length of the given string to the given length
+
+    :param string:
+    :param length:
+    :return: trimmed string to the length provided
+    """
     if len(string) > length:
         return string[:length]
     else:
         return string
 
 
-def extract_string(str, search_str):
+def trim_string_from_front(string, remove_starts_with_string):
+    """ Remove string provided in the search_string
+    and returns remainder of the string.
+    :param string:
+    :param remove_starts_with_string:
+    :return: trimmed string
+    """
+    if string.startswith(remove_starts_with_string):
+        return string[len(remove_starts_with_string):]
+    else:
+        raise ValueError('The beginning of the string does '
+                         'not match the string to be trimmed.')
+
+
+def extract_string(search_str):
     return str[len(search_str):]
+
+
+def convert_list_values_to_string(_list):
+    return list(map(str, _list))
+

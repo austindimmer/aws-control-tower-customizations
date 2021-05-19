@@ -1,5 +1,5 @@
 ##############################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
+#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
 #                                                                            #
 #  Licensed under the Apache License, Version 2.0 (the "License").           #
 #  You may not use this file except in compliance                            #
@@ -16,7 +16,7 @@
 # !/bin/python
 import os
 from aws.services.s3 import S3
-from aws.utils.url_conversion import convert_s3_url_to_http_url
+from aws.utils.url_conversion import convert_s3_url_to_http_url, build_http_url
 
 
 class StageFile(S3):
@@ -47,12 +47,14 @@ class StageFile(S3):
 
         if self.relative_file_path.lower().startswith('s3'):
             return self.convert_url()
+        elif self.relative_file_path.lower().startswith('http'):
+            return self.relative_file_path
         else:
             return self.stage_file()
 
     def convert_url(self):
         """Convert the S3 URL s3://bucket-name/object
-        to HTTP URL https://s3.amazonaws.com/bucket-name/object
+        to HTTP URL https://bucket-name.s3.Region.amazonaws.com/key-name
         """
         return convert_s3_url_to_http_url(self.relative_file_path)
 
@@ -64,16 +66,15 @@ class StageFile(S3):
         """
         local_file = os.path.join(os.environ.get('MANIFEST_FOLDER'),
                                   self.relative_file_path)
-        remote_file = "{}/{}".format(os.environ.get('TEMPLATE_KEY_PREFIX'),
-                                     self.relative_file_path)
-        self.logger.info("Uploading the template file: {} to S3 bucket: {}  "
+        key_name = "{}/{}".format(os.environ.get('TEMPLATE_KEY_PREFIX'),
+                                  self.relative_file_path)
+        self.logger.info("Uploading the template file: {} to S3 bucket: {} "
                          "and key: {}".format(local_file,
                                               os.environ.get('STAGING_BUCKET'),
-                                              remote_file))
+                                              key_name))
         super().upload_file(os.environ.get('STAGING_BUCKET'),
                             local_file,
-                            remote_file)
-        s3_url = "{}{}/{}".format('https://s3.amazonaws.com/',
-                                  os.environ.get('STAGING_BUCKET'),
-                                  remote_file)
-        return s3_url
+                            key_name)
+        http_url = build_http_url(os.environ.get('STAGING_BUCKET'),
+                                  key_name)
+        return http_url

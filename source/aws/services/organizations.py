@@ -1,5 +1,5 @@
 ##############################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
+#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
 #                                                                            #
 #  Licensed under the Apache License, Version 2.0 (the "License").           #
 #  You may not use this file except in compliance                            #
@@ -115,13 +115,3 @@ class Organizations(Boto3Session):
             self.logger.log_unhandled_exception(e)
             raise
 
-    @try_except_retry(count=4, multiplier=2)
-    def describe_account(self, acct_id):
-        try:
-            response = self.org_client.describe_account(
-                AccountId=acct_id
-            )
-            return response
-        except ClientError as e:
-            self.logger.log_unhandled_exception(e)
-            raise

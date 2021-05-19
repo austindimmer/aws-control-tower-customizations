@@ -1,5 +1,5 @@
 ##############################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
+#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
 #                                                                            #
 #  Licensed under the Apache License, Version 2.0 (the "License").           #
 #  You may not use this file except in compliance                            #
@@ -25,12 +25,18 @@ class StackSet(Boto3Session):
     def __init__(self, logger, **kwargs):
         self.logger = logger
         __service_name = 'cloudformation'
+        self.max_concurrent_percent = int(
+            os.environ.get('MAX_CONCURRENT_PERCENT', 100))
+        self.failed_tolerance_percent = int(
+            os.environ.get('FAILED_TOLERANCE_PERCENT', 10))
+        self.max_results_per_page = 20
         super().__init__(logger, __service_name, **kwargs)
         self.cfn_client = super().get_client()
         self.operation_in_prog_except_msg =  \
             'Caught exception OperationInProgressException'  \
             ' handling the exception...'
 
+    @try_except_retry()
     def describe_stack_set(self, stack_set_name):
         try:
             response = self.cfn_client.describe_stack_set(
@@ -53,6 +59,7 @@ class StackSet(Boto3Session):
             self.logger.log_unhandled_exception(e)
             raise
 
+    @try_except_retry()
     def list_stack_instances(self, **kwargs):
         try:
             response = self.cfn_client.list_stack_instances(**kwargs)
@@ -61,30 +68,51 @@ class StackSet(Boto3Session):
             self.logger.log_unhandled_exception(e)
             raise
 
-    def list_stack_instances_per_account(self, stack_name,
-                                         account_id,
-                                         max_results=20):
+    def get_accounts_and_regions_per_stack_set(self, stack_name):
+        """
+            List deployed stack instances for a stack set and returns the list
+            of accounts and regions where the stack instances are deployed.
+        :param stack_name: stack set name
+        :return:
+            list of accounts and regions where provided stack instances are
+            deployed
+        """
         try:
             response = self.cfn_client.list_stack_instances(
                 StackSetName=stack_name,
-                StackInstanceAccount=account_id,
-                MaxResults=max_results
+                MaxResults=self.max_results_per_page
             )
             stack_instance_list = response.get('Summaries', [])
+            # build the account and region list for the stack set
+            # using list(set(LIST)) to remove the duplicate values from the list
+            account_list = list(set([stack_instance['Account']
+                                     for stack_instance
+                                     in stack_instance_list]))
+            region_list = list(set([stack_instance['Region']
+                                    for stack_instance
+                                    in stack_instance_list]))
             next_token = response.get('NextToken', None)
 
             while next_token is not None:
                 self.logger.info("Next Token Returned: {}".format(next_token))
-                self.cfn_client.list_stack_instances(
+                response = self.cfn_client.list_stack_instances(
                     StackSetName=stack_name,
-                    StackInstanceAccount=account_id,
-                    MaxResults=max_results,
+                    MaxResults=self.max_results_per_page,
                     NextToken=next_token
                 )
-                self.logger.info("Extending Stack Instance List")
-                stack_instance_list.extend(response.get('Summaries', []))
+                stack_instance_list = response.get('Summaries', [])
                 next_token = response.get('NextToken', None)
-            return stack_instance_list
+
+                # update account and region lists
+                additional_account_list = list(set([stack_instance['Account']
+                                                    for stack_instance in
+                                                    stack_instance_list]))
+                additional_region_list = list(set([stack_instance['Region']
+                                                   for stack_instance
+                                                   in stack_instance_list]))
+                account_list = account_list + additional_account_list
+                region_list = region_list + additional_region_list
+            return list(set(account_list)), list(set(region_list))
         except ClientError as e:
             self.logger.log_unhandled_exception(e)
             raise
@@ -127,17 +155,15 @@ class StackSet(Boto3Session):
             self.logger.log_unhandled_exception(e)
             raise
 
-    def create_stack_instances(self, stack_set_name, account_list, region_list,
-                               failed_tolerance_percent=0,
-                               max_concurrent_percent=100):
+    def create_stack_instances(self, stack_set_name, account_list, region_list):
         try:
             response = self.cfn_client.create_stack_instances(
                 StackSetName=stack_set_name,
                 Accounts=account_list,
                 Regions=region_list,
                 OperationPreferences={
-                    'FailureTolerancePercentage': failed_tolerance_percent,
-                    'MaxConcurrentPercentage': max_concurrent_percent
+                    'FailureTolerancePercentage': self.failed_tolerance_percent,
+                    'MaxConcurrentPercentage': self.max_concurrent_percent
                 }
             )
             return response
@@ -149,10 +175,9 @@ class StackSet(Boto3Session):
                 self.logger.log_unhandled_exception(e)
                 raise
 
-    def create_stack_instances_with_override_params(
-        self, stack_set_name, account_list, region_list,
-        override_params, failed_tolerance_percent=0,
-            max_concurrent_percent=100):
+    def create_stack_instances_with_override_params(self, stack_set_name,
+                                                    account_list, region_list,
+                                                    override_params):
         try:
             parameters = []
             param_dict = {}
@@ -175,8 +200,8 @@ class StackSet(Boto3Session):
                 Regions=region_list,
                 ParameterOverrides=parameters,
                 OperationPreferences={
-                    'FailureTolerancePercentage': failed_tolerance_percent,
-                    'MaxConcurrentPercentage': max_concurrent_percent
+                    'FailureTolerancePercentage': self.failed_tolerance_percent,
+                    'MaxConcurrentPercentage': self.max_concurrent_percent
                 }
             )
             return response
@@ -191,9 +216,7 @@ class StackSet(Boto3Session):
                 raise
 
     def update_stack_instances(self, stack_set_name, account_list, region_list,
-                               override_params,
-                               failed_tolerance_percent=0,
-                               max_concurrent_percent=100):
+                               override_params):
         try:
             parameters = []
             param_dict = {}
@@ -216,8 +239,8 @@ class StackSet(Boto3Session):
                 Regions=region_list,
                 ParameterOverrides=parameters,
                 OperationPreferences={
-                    'FailureTolerancePercentage': failed_tolerance_percent,
-                    'MaxConcurrentPercentage': max_concurrent_percent
+                    'FailureTolerancePercentage': self.failed_tolerance_percent,
+                    'MaxConcurrentPercentage': self.max_concurrent_percent
                 }
             )
             return response
@@ -281,9 +304,7 @@ class StackSet(Boto3Session):
             raise
 
     def delete_stack_instances(self, stack_set_name, account_list, region_list,
-                               retain_condition=False,
-                               failed_tolerance_percent=0,
-                               max_concurrent_percent=100):
+                               retain_condition=False):
         try:
             response = self.cfn_client.delete_stack_instances(
                 StackSetName=stack_set_name,
@@ -291,8 +312,8 @@ class StackSet(Boto3Session):
                 Regions=region_list,
                 RetainStacks=retain_condition,
                 OperationPreferences={
-                    'FailureTolerancePercentage': failed_tolerance_percent,
-                    'MaxConcurrentPercentage': max_concurrent_percent
+                    'FailureTolerancePercentage': self.failed_tolerance_percent,
+                    'MaxConcurrentPercentage': self.max_concurrent_percent
                 }
             )
             return response
@@ -316,6 +337,7 @@ class StackSet(Boto3Session):
             self.logger.log_unhandled_exception(e)
             raise
 
+    @try_except_retry()
     def list_stack_set_operations(self, **kwargs):
         try:
             response = self.cfn_client.list_stack_set_operations(**kwargs)

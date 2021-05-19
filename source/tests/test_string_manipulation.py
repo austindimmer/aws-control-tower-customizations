@@ -1,5 +1,5 @@
 ##############################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
+#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
 #                                                                            #
 #  Licensed under the Apache License, Version 2.0 (the "License").           #
 #  You may not use this file except in compliance                            #
@@ -29,13 +29,23 @@ def test_sanitize():
 def test_trim_length():
     actual_sting = "EighteenCharacters"
     eight_char_string = "Eighteen"
-    assert string_manipulation.trim_length(actual_sting, 8) == eight_char_string
-    assert string_manipulation.trim_length(actual_sting, 18) == actual_sting
-    assert string_manipulation.trim_length(actual_sting, 20) == actual_sting
+    assert string_manipulation\
+               .trim_length_from_end(actual_sting, 8) == eight_char_string
+    assert string_manipulation\
+               .trim_length_from_end(actual_sting, 18) == actual_sting
+    assert string_manipulation\
+               .trim_length_from_end(actual_sting, 20) == actual_sting
 
 
 def test_extract_string():
     actual_string = "abcdefgh"
     extract_string = "defgh"
-    assert string_manipulation.extract_string(actual_string, 'abc') == \
+    assert string_manipulation.trim_string_from_front(actual_string, 'abc') == \
            extract_string
+
+
+def test_convert_list_values_to_string():
+    list_of_numbers = [11, 22, 33, 44]
+    list_of_strings = string_manipulation.convert_list_values_to_string(list_of_numbers)
+    for string in list_of_strings:
+        assert isinstance(string, str)

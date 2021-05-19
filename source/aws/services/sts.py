@@ -1,5 +1,5 @@
 ###############################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.    #
+#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.    #
 #                                                                             #
 #  Licensed under the Apache License, Version 2.0 (the "License").            #
 #  You may not use this file except in compliance with the License.
@@ -18,13 +18,22 @@
 from os import environ
 from botocore.exceptions import ClientError
 from aws.utils.boto3_session import Boto3Session
+from aws.utils.get_partition import get_partition
 
 
 class AssumeRole(object):
-    def __call__(self, logger, account, role_arn, session_name):
+    def __call__(self, logger, account):
         try:
             sts = STS(logger)
             # assume role
+            session_name = "custom-control-tower-session"
+            partition = get_partition()
+            role_arn = "%s%s%s%s%s%s" % ("arn:",
+                                         partition,
+                                         ":iam::",
+                                         str(account),
+                                         ":role/",
+                                         environ.get('EXECUTION_ROLE_NAME'))
             credentials = sts.assume_role(role_arn, session_name)
             return credentials
         except ClientError as e:
